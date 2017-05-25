@@ -1,0 +1,151 @@
+---
+title: "Regression Modeling"
+author: "Ali Harb"
+date: "May 25, 2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Libraries
+
+Load the required libraries to perform statistical analysis on the dataset.
+
+```{r message= FALSE, warning= FALSE}
+library(stats)
+library(MASS)
+library(fifer)
+library(moments)
+library(ggplot2)
+library(ggpubr)
+library(psych)
+library(leaps)
+```
+
+### Load Dataset
+ 
+Upload the train dataset from the GitHub to R environment.
+
+```{r}
+train_data = read.csv("https://raw.githubusercontent.com/aliharb/IS-605-Computational-Mathematics/master/train.csv", header = TRUE)
+colnames(train_data)
+```
+
+Check for best variable to do regression modeling 
+
+```{r message= FALSE, warning= FALSE}
+m <- lm(SalePrice ~ GrLivArea + LotArea + TotalBsmtSF, data=train_data)
+step <- stepAIC(m, direction="both")
+step$anova # display results
+
+attach(train_data)
+leaps<-regsubsets(SalePrice ~ GrLivArea + LotArea + TotalBsmtSF,data=train_data,nbest=3)
+summary(leaps)
+plot(leaps,scale="r2")
+```
+
+Based on the leaps results of the r-squared, i will choose the Ground living Area for my analysis.
+
+Let's subset the variables and get the summary statitics 
+
+```{r}
+data <- subset(train_data, select = c("GrLivArea","SalePrice"))
+summary(data)
+
+str(data)
+describe(data)
+
+plot(data)
+```
+
+The scatter plot illustrates a possible positive linear relationship between ground living areas and sale prices. The scatter plot exhibit outliers specially at the high prices.
+
+Lets take a visual look at the normal distribution 
+
+```{r}
+multi.hist(data) 
+```
+
+Even though the distribution not symmetric we will apply a simple regression and look at the result and correlation 
+
+```{r}
+m <- lm(SalePrice ~ GrLivArea, data=train_data)
+coeffs <- coefficients(m)
+
+print(paste0("SalesPrice = ", round(coeffs[2],3),"x + ",round(coeffs[1],3)))
+
+summary(m)
+cor(data$GrLivArea,data$SalePrice)
+
+plot(m)
+```
+
+
+
+```{r}
+
+data$predicted <- predict(m)   # Save the predicted values
+data$residuals <- residuals(m) # Save the residual values
+
+ggplot(data, aes(x = GrLivArea, y = SalePrice)) +
+  geom_smooth(method = "lm", se = FALSE, color = "lightgrey") +
+  geom_segment(aes(xend = GrLivArea, yend = predicted), alpha = .2) +
+
+  # > Color AND size adjustments made here...
+  geom_point(aes(color = abs(residuals), size = abs(residuals))) + # size also mapped
+  scale_color_continuous(low = "black", high = "red") +
+  guides(color = FALSE, size = FALSE) +  # Size legend also removed
+  # <
+
+  geom_point(aes(y = predicted), shape = 1) +
+  theme_bw()
+
+```
+
+Looking the summary values and plots, we can determine the following:
+
+The R-square value of ~0.5 is indicate nonsymmetrical residual even though the correlation is acceptable ~ 0.71 
+The P-value is very small and under 0.05 significance.
+
+The cook's distance illustrates the points that influence our simple regression model result that is located farther away from the other points on the graph.  
+
+The residuals are not symmetric and localized which explained the low value of r-square. The difference between the fitting value and the predict values vary along the regression line.
+
+The qqplot indicate a right skewed distribution which would be an indication of using the square or exponential model will produce a better result.
+
+Based on the above results, we will do an exponential transformation model to see if have a better result.
+
+
+```{r}
+X<-data$GrLivArea
+fit <- fitdistr(X,"exponential")
+lambda <- fit$estimate
+sample <- rexp(1000,lambda)
+```
+
+
+
+```{r}
+# plot historgram of exponential function
+par(oma=c(3,3,0,0),mar=c(3,3,2,2),mfrow=c(2,1))
+hist(sample,prob=TRUE,breaks=25)
+curve(dexp(x,lambda),add=T)
+
+# plot histogram of original x
+hist(data$GrLivArea, breaks=25)
+
+coef(fit)
+print(fit)
+vcov(fit)
+```
+
+
+
+As shown above the density distribution exponential regression produce a very good fit to the datawith a small change of rate and very small covariance.
+
+
+
+
+
